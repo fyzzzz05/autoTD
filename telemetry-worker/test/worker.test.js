@@ -167,6 +167,29 @@ class FakeStatement {
         };
       case "list_events":
         return { results: [...this.db.events.values()] };
+      case "daily":
+        return {
+          results: [...new Set([
+            ...[...this.db.dailyInstallationSnapshots.values()].map((row) => row.day),
+            ...[...this.db.dailyStudentSnapshots.values()].map((row) => row.day),
+            ...this.db.tdDeltas.map((row) => row.day)
+          ])]
+            .sort()
+            .map((day) => ({
+              day,
+              active_installations: new Set(
+                [...this.db.dailyInstallationSnapshots.values()]
+                  .filter((row) => row.day === day)
+                  .map((row) => row.installation_id)
+              ).size,
+              active_students: new Set(
+                [...this.db.dailyStudentSnapshots.values()]
+                  .filter((row) => row.day === day)
+                  .map((row) => row.student_id)
+              ).size,
+              td_delta: this.db.tdDeltas.filter((row) => row.day === day).reduce((sum, row) => sum + row.delta, 0)
+            }))
+        };
       default:
         throw new Error(`unknown all op ${this.op}`);
     }
@@ -325,5 +348,46 @@ describe("autotd telemetry worker", () => {
     assert.equal(summary.current_total_users, 1);
     assert.equal(summary.historical_users, 1);
     assert.equal(summary.today_td_delta, 3);
+  });
+
+  it("allows Pages frontend CORS access to admin APIs", async () => {
+    const testEnv = env();
+    const preflight = await handleRequest(
+      new Request("https://example.test/admin/api/summary", {
+        method: "OPTIONS",
+        headers: { Origin: "https://autotd-telemetry-dashboard.pages.dev" }
+      }),
+      testEnv
+    );
+
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get("Access-Control-Allow-Origin"), "*");
+
+    const rejected = await handleRequest(new Request("https://example.test/admin/api/summary"), testEnv);
+    assert.equal(rejected.status, 401);
+    assert.equal(rejected.headers.get("Access-Control-Allow-Origin"), "*");
+  });
+
+  it("returns daily series for dashboard charts", async () => {
+    const testEnv = env();
+    await register(testEnv, "install-1", [{ student_id: "1001", td_count: 5 }]);
+    const body = eventBody();
+    const signature = await signPayload("secret-1", body);
+    await handleRequest(
+      jsonRequest("https://example.test/v1/events", body, {
+        "X-AutoTD-Installation": "install-1",
+        "X-AutoTD-Signature": signature
+      }),
+      testEnv
+    );
+
+    const response = await handleRequest(new Request("https://example.test/admin/api/daily?token=admin-token"), testEnv);
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.daily[0].day, "2026-05-05");
+    assert.equal(payload.daily[0].active_installations, 1);
+    assert.equal(payload.daily[0].active_students, 1);
+    assert.equal(payload.daily[0].td_delta, 3);
   });
 });

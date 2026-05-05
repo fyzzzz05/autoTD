@@ -16,6 +16,7 @@ src/*.egg-info/
 /images/
 
 # Cloudflare local state.
+.wrangler/
 telemetry-worker/.wrangler/
 telemetry-worker/node_modules/
 telemetry-worker/.workers-dev-subdomain

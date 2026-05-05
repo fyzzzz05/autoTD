@@ -82,7 +82,7 @@ autotd telemetry sync
 
 如果 endpoint 尚未配置，事件会保存在 `~/.autoTD/telemetry_queue.jsonl`，不会影响打卡流程；配置 endpoint 后可用 `autotd telemetry sync` 发送。
 
-维护者侧 Worker/D1 实现在 `telemetry-worker/`，部署说明见 `telemetry-worker/README.md`。
+维护者侧 Worker/D1 实现在 `telemetry-worker/`，Cloudflare Pages 管理前端实现在 `telemetry-pages/`。当前 Pages 地址为 `https://autotd-telemetry-dashboard.pages.dev/`，Admin Token 保存在仓库外的 `/Users/denerate/ELSE/autotd-telemetry-admin-token.txt`。
 
 ## 用户管理
 

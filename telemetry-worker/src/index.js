@@ -1,4 +1,9 @@
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Authorization, Content-Type"
+};
 
 export default {
   async fetch(request, env) {
@@ -9,6 +14,9 @@ export default {
 export async function handleRequest(request, env) {
   const url = new URL(request.url);
   try {
+    if (request.method === "OPTIONS" && url.pathname.startsWith("/admin/api/")) {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
     if (request.method === "POST" && url.pathname === "/v1/installations/register") {
       return json(await registerInstallation(request, env));
     }
@@ -24,20 +32,28 @@ export async function handleRequest(request, env) {
     if (request.method === "GET" && url.pathname === "/admin/api/summary") {
       if (!isAdmin(request, env)) return unauthorized();
       const day = url.searchParams.get("day") || todayDay();
-      return json(await env.DB.prepare(summarySql()).bind(day, day, day).first());
+      return adminJson(await env.DB.prepare(summarySql()).bind(day, day, day).first());
     }
     if (request.method === "GET" && url.pathname === "/admin/api/users") {
       if (!isAdmin(request, env)) return unauthorized();
       const { results } = await env.DB.prepare(listUsersSql()).all();
-      return json({ users: results });
+      return adminJson({ users: results });
     }
     if (request.method === "GET" && url.pathname === "/admin/api/events") {
       if (!isAdmin(request, env)) return unauthorized();
       const { results } = await env.DB.prepare(listEventsSql()).all();
-      return json({ events: results });
+      return adminJson({ events: results });
+    }
+    if (request.method === "GET" && url.pathname === "/admin/api/daily") {
+      if (!isAdmin(request, env)) return unauthorized();
+      const { results } = await env.DB.prepare(dailySql()).all();
+      return adminJson({ daily: results });
     }
     return json({ error: "not_found" }, 404);
   } catch (error) {
+    if (url.pathname.startsWith("/admin/api/")) {
+      return adminJson({ error: "internal_error", message: String(error?.message || error) }, 500);
+    }
     return json({ error: "internal_error", message: String(error?.message || error) }, 500);
   }
 }
@@ -167,7 +183,7 @@ function isAdmin(request, env) {
 }
 
 function unauthorized() {
-  return json({ error: "unauthorized" }, 401);
+  return adminJson({ error: "unauthorized" }, 401);
 }
 
 function responseError(error, status) {
@@ -177,6 +193,10 @@ function responseError(error, status) {
 function json(payload, status = 200) {
   if (payload instanceof Response) return payload;
   return new Response(JSON.stringify(payload), { status, headers: JSON_HEADERS });
+}
+
+function adminJson(payload, status = 200) {
+  return new Response(JSON.stringify(payload), { status, headers: { ...JSON_HEADERS, ...CORS_HEADERS } });
 }
 
 function requireString(value, name) {
@@ -380,4 +400,41 @@ SELECT event_id, installation_id, event_type, event_day, occurred_at, payload
 FROM events
 ORDER BY occurred_at DESC
 LIMIT 100`;
+}
+
+function dailySql() {
+  return `/* op: daily */
+WITH days AS (
+  SELECT day FROM daily_installation_snapshots
+  UNION
+  SELECT day FROM daily_student_snapshots
+  UNION
+  SELECT day FROM td_count_deltas
+),
+installation_counts AS (
+  SELECT day, COUNT(DISTINCT installation_id) AS active_installations
+  FROM daily_installation_snapshots
+  GROUP BY day
+),
+student_counts AS (
+  SELECT day, COUNT(DISTINCT student_id) AS active_students
+  FROM daily_student_snapshots
+  GROUP BY day
+),
+td_counts AS (
+  SELECT day, COALESCE(SUM(delta), 0) AS td_delta
+  FROM td_count_deltas
+  GROUP BY day
+)
+SELECT
+  days.day,
+  COALESCE(installation_counts.active_installations, 0) AS active_installations,
+  COALESCE(student_counts.active_students, 0) AS active_students,
+  COALESCE(td_counts.td_delta, 0) AS td_delta
+FROM days
+LEFT JOIN installation_counts ON installation_counts.day = days.day
+LEFT JOIN student_counts ON student_counts.day = days.day
+LEFT JOIN td_counts ON td_counts.day = days.day
+ORDER BY days.day DESC
+LIMIT 60`;
 }

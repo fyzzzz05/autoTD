@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoTD Telemetry Dashboard</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div>
+        <p class="eyebrow">AutoTD</p>
+        <h1>Telemetry</h1>
+      </div>
+      <nav aria-label="Dashboard sections">
+        <a href="#overview">总览</a>
+        <a href="#trend">趋势</a>
+        <a href="#users">用户</a>
+        <a href="#events">事件</a>
+      </nav>
+      <form id="settings-form" class="settings-panel">
+        <label>
+          Worker API
+          <input id="api-endpoint" name="endpoint" type="url" autocomplete="off">
+        </label>
+        <label>
+          Admin Token
+          <input id="admin-token" name="token" type="password" autocomplete="current-password">
+        </label>
+        <button type="submit">刷新</button>
+        <button id="clear-token" type="button" class="secondary">清除</button>
+      </form>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">管理台</p>
+          <h2>AutoTD 使用统计</h2>
+        </div>
+        <div class="topbar-actions">
+          <input id="day-filter" type="date" aria-label="统计日期">
+          <button id="refresh-now" type="button">刷新</button>
+        </div>
+      </header>
+
+      <section id="overview" class="metrics-grid" aria-label="核心指标"></section>
+
+      <section id="trend" class="panel chart-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">最近 60 天</p>
+            <h3>活跃与 TD 增量</h3>
+          </div>
+          <span id="last-updated" class="muted"></span>
+        </div>
+        <div id="chart" class="chart"></div>
+      </section>
+
+      <section id="users" class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Users</p>
+            <h3>用户明细</h3>
+          </div>
+          <input id="user-search" type="search" placeholder="搜索学号">
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>学号</th>
+                <th>TD 数</th>
+                <th>使用天数</th>
+                <th>首次出现</th>
+                <th>最后出现</th>
+              </tr>
+            </thead>
+            <tbody id="users-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="events" class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Events</p>
+            <h3>最近事件</h3>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>事件</th>
+                <th>安装</th>
+                <th>数据</th>
+              </tr>
+            </thead>
+            <tbody id="events-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

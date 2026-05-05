@@ -48,6 +48,8 @@ Open the private dashboard:
 https://autotd-telemetry.autotd-buaa.workers.dev/admin?token=<ADMIN_TOKEN>
 ```
 
+This Worker page is a small fallback page embedded in the Worker. The primary dashboard is a Cloudflare Pages static frontend in `../telemetry-pages`; it calls the same `/admin/api/*` endpoints with an `Authorization: Bearer <ADMIN_TOKEN>` header.
+
 The local admin token is stored outside the repository at:
 
 ```text
