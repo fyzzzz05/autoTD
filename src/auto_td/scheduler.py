@@ -280,7 +280,7 @@ def _perform_entrance(
 ) -> tuple[bool, str]:
     logger.info("用户 %s 第 %s/%s 轮入口打卡", user.student_id, round_no, user.rounds)
     response = client.check(user, user.entrance_machine_id, timestamp=now.timestamp())
-    _record_count(storage, user, response.count, count_source="td_check" if response.success else "observation")
+    _record_count(storage, user, response.count, count_source="td_entrance" if response.success else "observation")
     logger.info("服务器消息：%s", response.server_message)
     if not response.success:
         if "非法时间" in response.server_message:
@@ -319,7 +319,7 @@ def _perform_exit(
 ) -> tuple[bool, str]:
     logger.info("用户 %s 第 %s/%s 轮出口打卡", user.student_id, round_no, user.rounds)
     response = client.check(user, user.exit_machine_id, timestamp=now.timestamp())
-    _record_count(storage, user, response.count, count_source="td_check" if response.success else "observation")
+    _record_count(storage, user, response.count, count_source="td_exit" if response.success else "observation")
     logger.info("服务器消息：%s", response.server_message)
     if not response.success:
         if "非法时间" in response.server_message:

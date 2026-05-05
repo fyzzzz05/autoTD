@@ -193,11 +193,15 @@ def enqueue_td_count_changed(
     initial = previous is None
     decreased = previous is not None and new < previous
     source = str(count_source or "observation")
-    delta = 0 if decreased else max(0, new - previous) if previous is not None else 0
+    delta = 0
     inferred_initial_delta = False
-    if initial and source == "td_check" and new > 0:
-        delta = 1
-        inferred_initial_delta = True
+    if source == "td_exit" and not decreased:
+        if previous is None:
+            if new > 0:
+                delta = 1
+                inferred_initial_delta = True
+        else:
+            delta = max(0, new - previous)
     payload = {
         "student_id": str(student_id),
         "previous_count": previous,

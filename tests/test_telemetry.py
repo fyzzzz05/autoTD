@@ -165,7 +165,7 @@ class TelemetryTests(unittest.TestCase):
         self.assertNotIn("entrance_machine", text)
         self.assertNotIn("in.jpg", text)
 
-    def test_set_last_count_queues_initial_and_positive_delta_events(self):
+    def test_observed_count_changes_do_not_create_delta_events(self):
         self.add_user("1001")
 
         self.storage.set_last_count("1001", 5, when=datetime(2026, 5, 5, 8, 0, tzinfo=BEIJING_TZ))
@@ -173,10 +173,36 @@ class TelemetryTests(unittest.TestCase):
         self.storage.set_last_count("1001", 7, when=datetime(2026, 5, 5, 8, 2, tzinfo=BEIJING_TZ))
 
         events = self.read_queue()
-        self.assertEqual([event["payload"]["delta"] for event in events], [0, 3, 0])
+        self.assertEqual([event["payload"]["delta"] for event in events], [0, 0, 0])
         self.assertTrue(events[0]["payload"]["initial_observation"])
-        self.assertFalse(events[1]["payload"]["initial_observation"])
+        self.assertEqual([event["payload"]["count_source"] for event in events], ["observation", "observation", "observation"])
         self.assertTrue(events[2]["payload"]["count_decreased"])
+
+    def test_exit_count_changes_create_delta_events(self):
+        self.add_user("1001")
+
+        self.storage.set_last_count(
+            "1001",
+            5,
+            when=datetime(2026, 5, 5, 8, 0, tzinfo=BEIJING_TZ),
+            count_source="td_entrance",
+        )
+        self.storage.set_last_count(
+            "1001",
+            6,
+            when=datetime(2026, 5, 5, 8, 1, tzinfo=BEIJING_TZ),
+            count_source="td_exit",
+        )
+        self.storage.set_last_count(
+            "1001",
+            7,
+            when=datetime(2026, 5, 5, 8, 2, tzinfo=BEIJING_TZ),
+            count_source="td_exit",
+        )
+
+        events = self.read_queue()
+        self.assertEqual([event["payload"]["delta"] for event in events], [0, 1, 1])
+        self.assertEqual([event["payload"]["count_source"] for event in events], ["td_entrance", "td_exit", "td_exit"])
 
     def test_flush_registers_installation_then_posts_signed_events(self):
         self.add_user("1001")

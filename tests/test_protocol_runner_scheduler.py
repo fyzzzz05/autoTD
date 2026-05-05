@@ -141,7 +141,7 @@ class ProtocolRunnerSchedulerTests(unittest.TestCase):
         self.assertEqual(result.failure_count, 1)
         self.assertEqual(self.storage.get_last_count("1002"), 8)
 
-    def test_successful_td_checks_count_initial_telemetry_delta(self):
+    def test_only_successful_exit_checks_count_telemetry_delta(self):
         self.add_user("1001", rounds=2)
         client = FakeClient(
             [
@@ -157,8 +157,11 @@ class ProtocolRunnerSchedulerTests(unittest.TestCase):
 
         self.assertEqual(result.success_count, 1)
         events = [event for event in self.telemetry_events() if event["event_type"] == "td_count_changed"]
-        self.assertEqual([event["payload"]["delta"] for event in events], [1, 1, 1, 1])
-        self.assertEqual([event["payload"]["count_source"] for event in events], ["td_check"] * 4)
+        self.assertEqual([event["payload"]["delta"] for event in events], [0, 1, 0, 1])
+        self.assertEqual(
+            [event["payload"]["count_source"] for event in events],
+            ["td_entrance", "td_exit", "td_entrance", "td_exit"],
+        )
 
     def test_query_count_uses_check_request_without_uploading_photo(self):
         user = self.add_user("1001")

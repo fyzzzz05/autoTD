@@ -31,7 +31,7 @@ def run_user_pipeline(
     for round_idx in range(user.rounds):
         logger.info("用户 %s 第 %s/%s 轮入口打卡", user.student_id, round_idx + 1, user.rounds)
         entrance = client.check(user, user.entrance_machine_id)
-        _record_count(storage, user, entrance.count, count_source="td_check" if entrance.success else "observation")
+        _record_count(storage, user, entrance.count, count_source="td_entrance" if entrance.success else "observation")
         logger.info("服务器消息：%s", entrance.server_message)
         if not entrance.success:
             logger.warning("用户 %s 入口打卡失败", user.student_id)
@@ -44,7 +44,7 @@ def run_user_pipeline(
 
         logger.info("用户 %s 第 %s/%s 轮出口打卡", user.student_id, round_idx + 1, user.rounds)
         exit_response = client.check(user, user.exit_machine_id)
-        _record_count(storage, user, exit_response.count, count_source="td_check" if exit_response.success else "observation")
+        _record_count(storage, user, exit_response.count, count_source="td_exit" if exit_response.success else "observation")
         logger.info("服务器消息：%s", exit_response.server_message)
         if not exit_response.success:
             logger.warning("用户 %s 出口打卡失败", user.student_id)
