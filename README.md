@@ -9,7 +9,7 @@
 > 要求：python >= 3.10
 
 ```bash
-pip install autotd-buaa==0.1.8
+pip install autotd-buaa==0.1.9
 ```
 
 ## 本地开发
@@ -60,7 +60,7 @@ autotd init --from ./autoTD
 
 ## Telemetry 上报
 
-从 `0.1.7` 开始，AutoTD 默认开启 telemetry，用于向维护者的 Cloudflare Worker + D1 后台上报安装、运行、停止、用户变化、TD 次数变化和后台运行跨日快照。`0.1.8` 默认 endpoint 为 `https://autotd-telemetry.autotd-buaa.workers.dev`。
+从 `0.1.7` 开始，AutoTD 默认开启 telemetry，用于向维护者的 Cloudflare Worker + D1 后台上报安装、运行、停止、用户变化、TD 次数变化和后台运行跨日快照。`0.1.9` 默认 endpoint 为 `https://autotd-telemetry.autotd-buaa.workers.dev`。
 
 会上报的数据包括：明文学号、每个学号最近一次 TD 次数、当前用户数量、安装实例 ID、AutoTD 版本、平台、事件类型和事件时间。
 

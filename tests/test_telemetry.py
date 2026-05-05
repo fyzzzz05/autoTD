@@ -46,6 +46,26 @@ class FakeTelemetryTransport:
         return {"ok": True}
 
 
+class UnknownInstallationOnceTransport:
+    def __init__(self):
+        self.calls = []
+        self.rejected = False
+
+    def post_json(self, url, payload, headers=None, timeout=None):
+        self.calls.append(
+            {
+                "url": url,
+                "payload": payload,
+                "headers": dict(headers or {}),
+                "timeout": timeout,
+            }
+        )
+        if url.endswith("/v1/events") and not self.rejected:
+            self.rejected = True
+            raise RuntimeError('telemetry HTTP 401: {"error":"unknown_installation"}')
+        return {"ok": True}
+
+
 class TelemetryTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -188,6 +208,28 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual(sent, 0)
         self.assertEqual(queue_length(self.storage), 1)
         self.assertIn("offline", status["last_error"])
+
+    def test_flush_reregisters_when_server_lost_installation(self):
+        self.add_user("1001")
+        enable_telemetry(self.storage, endpoint="https://example.test")
+        state = self.storage.load_state()
+        state["telemetry"]["registered"] = True
+        self.storage.save_state(state)
+        enqueue_user_changed(self.storage, "add", "1001", now=datetime(2026, 5, 5, 8, 0, tzinfo=BEIJING_TZ))
+        transport = UnknownInstallationOnceTransport()
+
+        sent = flush_telemetry_queue(self.storage, transport=transport)
+
+        self.assertEqual(sent, 1)
+        self.assertEqual(queue_length(self.storage), 0)
+        self.assertEqual(
+            [call["url"] for call in transport.calls],
+            [
+                "https://example.test/v1/events",
+                "https://example.test/v1/installations/register",
+                "https://example.test/v1/events",
+            ],
+        )
 
     def test_telemetry_cli_status_enable_disable_and_sync(self):
         with mock.patch("auto_td.cli.flush_telemetry_queue", return_value=0):

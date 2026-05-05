@@ -326,6 +326,44 @@ describe("autotd telemetry worker", () => {
     assert.equal(testEnv.DB.students.size, 2);
   });
 
+  it("applies added users from user_changed snapshots immediately", async () => {
+    const testEnv = env();
+    await register(testEnv, "install-1", [{ student_id: "1001", td_count: 5 }]);
+    const body = eventBody({
+      event_id: "event-add-user",
+      event_type: "user_changed",
+      payload: {
+        change_type: "add",
+        affected_student_id: "1002",
+        current_user_count: 2,
+        users: [
+          { student_id: "1001", td_count: 5 },
+          { student_id: "1002", td_count: null }
+        ]
+      }
+    });
+    const signature = await signPayload("secret-1", body);
+
+    await handleRequest(
+      jsonRequest("https://example.test/v1/events", body, {
+        "X-AutoTD-Installation": "install-1",
+        "X-AutoTD-Signature": signature
+      }),
+      testEnv
+    );
+
+    const summaryResponse = await handleRequest(
+      new Request("https://example.test/admin/api/summary?token=admin-token&day=2026-05-05"),
+      testEnv
+    );
+    const summary = await summaryResponse.json();
+
+    assert.equal(summary.historical_users, 2);
+    assert.equal(summary.todays_new_users, 2);
+    assert.equal(testEnv.DB.installations.get("install-1").current_user_count, 2);
+    assert.equal(testEnv.DB.dailyStudentSnapshots.has("1002:2026-05-05"), true);
+  });
+
   it("protects admin APIs and returns summary metrics", async () => {
     const testEnv = env();
     await register(testEnv, "install-1", [{ student_id: "1001", td_count: 5 }]);

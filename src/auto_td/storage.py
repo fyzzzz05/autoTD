@@ -132,7 +132,13 @@ class AppStorage:
     def save_state(self, state: Dict[str, Any]) -> None:
         _write_json(self.state_path, state)
 
-    def set_last_count(self, student_id: str, count: int, when: Optional[datetime] = None) -> None:
+    def set_last_count(
+        self,
+        student_id: str,
+        count: int,
+        when: Optional[datetime] = None,
+        count_source: str = "observation",
+    ) -> None:
         state = self.load_state()
         counts = state.setdefault("counts", {})
         previous = counts.get(str(student_id), {}).get("count")
@@ -143,7 +149,7 @@ class AppStorage:
         self.save_state(state)
         from .telemetry import enqueue_td_count_changed
 
-        enqueue_td_count_changed(self, student_id, previous, count, now=when)
+        enqueue_td_count_changed(self, student_id, previous, count, now=when, count_source=count_source)
 
     def get_last_count(self, student_id: str) -> Optional[int]:
         count_info = self.load_state().get("counts", {}).get(str(student_id))

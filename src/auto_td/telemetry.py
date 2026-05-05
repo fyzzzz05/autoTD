@@ -186,19 +186,27 @@ def enqueue_td_count_changed(
     previous_count: Optional[int],
     new_count: int,
     now: Optional[datetime] = None,
+    count_source: str = "observation",
 ) -> Optional[dict[str, Any]]:
     previous = int(previous_count) if previous_count is not None else None
     new = int(new_count)
     initial = previous is None
     decreased = previous is not None and new < previous
-    delta = 0 if initial or decreased else max(0, new - previous)
+    source = str(count_source or "observation")
+    delta = 0 if decreased else max(0, new - previous) if previous is not None else 0
+    inferred_initial_delta = False
+    if initial and source == "td_check" and new > 0:
+        delta = 1
+        inferred_initial_delta = True
     payload = {
         "student_id": str(student_id),
         "previous_count": previous,
         "new_count": new,
         "delta": delta,
         "initial_observation": initial,
+        "inferred_initial_delta": inferred_initial_delta,
         "count_decreased": decreased,
+        "count_source": source,
         **_snapshot_payload(storage),
     }
     return enqueue_event(storage, "td_count_changed", payload, now=now)
@@ -262,28 +270,29 @@ def flush_telemetry_queue(
 
     try:
         if not telemetry.get("registered", False):
-            transport.post_json(
-                _url(endpoint, "/v1/installations/register"),
-                _registration_payload(storage, telemetry),
-                timeout=timeout,
-            )
-            _mark_registered(storage)
+            telemetry = _register_installation(storage, transport, endpoint, telemetry, timeout)
         sent = 0
         remaining = []
         for event in events:
             body = {"event": event}
-            signature = _signature(telemetry["installation_secret"], body)
             try:
-                transport.post_json(
-                    _url(endpoint, "/v1/events"),
-                    body,
-                    headers={"X-AutoTD-Installation": telemetry["installation_id"], "X-AutoTD-Signature": signature},
-                    timeout=timeout,
-                )
+                _post_event(storage, transport, endpoint, telemetry, body, timeout)
                 sent += 1
             except Exception as exc:
-                remaining.append(event)
-                _record_last_error(storage, str(exc))
+                if _is_unknown_installation_error(exc):
+                    try:
+                        _mark_unregistered(storage)
+                        telemetry = ensure_telemetry_state(storage)
+                        telemetry = _register_installation(storage, transport, endpoint, telemetry, timeout)
+                        _post_event(storage, transport, endpoint, telemetry, body, timeout)
+                        sent += 1
+                        continue
+                    except Exception as retry_exc:
+                        remaining.append(event)
+                        _record_last_error(storage, str(retry_exc))
+                else:
+                    remaining.append(event)
+                    _record_last_error(storage, str(exc))
         _write_queue(storage, remaining)
         if sent:
             _record_sent(storage)
@@ -302,6 +311,40 @@ def _registration_payload(storage, telemetry: dict[str, Any]) -> dict[str, Any]:
         "registered_at": _local_now(None).isoformat(timespec="seconds"),
         **_snapshot_payload(storage),
     }
+
+
+def _register_installation(
+    storage,
+    transport: TelemetryTransport,
+    endpoint: str,
+    telemetry: dict[str, Any],
+    timeout: float,
+) -> dict[str, Any]:
+    transport.post_json(
+        _url(endpoint, "/v1/installations/register"),
+        _registration_payload(storage, telemetry),
+        timeout=timeout,
+    )
+    _mark_registered(storage)
+    return ensure_telemetry_state(storage)
+
+
+def _post_event(
+    storage,
+    transport: TelemetryTransport,
+    endpoint: str,
+    telemetry: dict[str, Any],
+    body: dict[str, Any],
+    timeout: float,
+) -> None:
+    del storage
+    signature = _signature(telemetry["installation_secret"], body)
+    transport.post_json(
+        _url(endpoint, "/v1/events"),
+        body,
+        headers={"X-AutoTD-Installation": telemetry["installation_id"], "X-AutoTD-Signature": signature},
+        timeout=timeout,
+    )
 
 
 def _snapshot_payload(storage) -> dict[str, Any]:
@@ -361,6 +404,16 @@ def _mark_registered(storage) -> None:
     state = storage.load_state()
     state.setdefault("telemetry", {})["registered"] = True
     storage.save_state(state)
+
+
+def _mark_unregistered(storage) -> None:
+    state = storage.load_state()
+    state.setdefault("telemetry", {})["registered"] = False
+    storage.save_state(state)
+
+
+def _is_unknown_installation_error(exc: Exception) -> bool:
+    return "unknown_installation" in str(exc)
 
 
 def _record_sent(storage) -> None:

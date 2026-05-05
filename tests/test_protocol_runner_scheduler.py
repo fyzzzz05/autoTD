@@ -108,6 +108,15 @@ class ProtocolRunnerSchedulerTests(unittest.TestCase):
         self.storage.save_user(user)
         return user
 
+    def telemetry_events(self):
+        if not self.storage.telemetry_queue_path.exists():
+            return []
+        return [
+            json.loads(line)
+            for line in self.storage.telemetry_queue_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
     def test_extract_exercise_count_accepts_chinese_colon_and_ascii_colon(self):
         self.assertEqual(extract_exercise_count("刷卡成功, 本学期锻炼次数:7"), 7)
         self.assertEqual(extract_exercise_count("刷卡成功，本学期锻炼次数：12"), 12)
@@ -131,6 +140,25 @@ class ProtocolRunnerSchedulerTests(unittest.TestCase):
         self.assertEqual(result.success_count, 1)
         self.assertEqual(result.failure_count, 1)
         self.assertEqual(self.storage.get_last_count("1002"), 8)
+
+    def test_successful_td_checks_count_initial_telemetry_delta(self):
+        self.add_user("1001", rounds=2)
+        client = FakeClient(
+            [
+                CheckResponse(True, "刷卡成功, 本学期锻炼次数:1", 1),
+                CheckResponse(True, "刷卡成功, 本学期锻炼次数:2", 2),
+                CheckResponse(True, "刷卡成功, 本学期锻炼次数:3", 3),
+                CheckResponse(True, "刷卡成功, 本学期锻炼次数:4", 4),
+            ]
+        )
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = run_all_users(self.storage, client=client, sleeper=lambda _seconds: None)
+
+        self.assertEqual(result.success_count, 1)
+        events = [event for event in self.telemetry_events() if event["event_type"] == "td_count_changed"]
+        self.assertEqual([event["payload"]["delta"] for event in events], [1, 1, 1, 1])
+        self.assertEqual([event["payload"]["count_source"] for event in events], ["td_check"] * 4)
 
     def test_query_count_uses_check_request_without_uploading_photo(self):
         user = self.add_user("1001")

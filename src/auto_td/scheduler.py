@@ -280,7 +280,7 @@ def _perform_entrance(
 ) -> tuple[bool, str]:
     logger.info("用户 %s 第 %s/%s 轮入口打卡", user.student_id, round_no, user.rounds)
     response = client.check(user, user.entrance_machine_id, timestamp=now.timestamp())
-    _record_count(storage, user, response.count)
+    _record_count(storage, user, response.count, count_source="td_check" if response.success else "observation")
     logger.info("服务器消息：%s", response.server_message)
     if not response.success:
         if "非法时间" in response.server_message:
@@ -319,7 +319,7 @@ def _perform_exit(
 ) -> tuple[bool, str]:
     logger.info("用户 %s 第 %s/%s 轮出口打卡", user.student_id, round_no, user.rounds)
     response = client.check(user, user.exit_machine_id, timestamp=now.timestamp())
-    _record_count(storage, user, response.count)
+    _record_count(storage, user, response.count, count_source="td_check" if response.success else "observation")
     logger.info("服务器消息：%s", response.server_message)
     if not response.success:
         if "非法时间" in response.server_message:
@@ -417,9 +417,9 @@ def _completed_user_state(
     }
 
 
-def _record_count(storage: AppStorage, user: User, count: Optional[int]) -> None:
+def _record_count(storage: AppStorage, user: User, count: Optional[int], count_source: str = "observation") -> None:
     if count is not None:
-        storage.set_last_count(user.student_id, count)
+        storage.set_last_count(user.student_id, count, count_source=count_source)
 
 
 def _merge_counts_from_disk(storage: AppStorage, state: dict) -> None:
