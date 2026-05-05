@@ -148,6 +148,10 @@ function renderChart() {
   const maxDelta = Math.max(1, ...rows.map((row) => Number(row.td_delta) || 0));
   const step = rows.length > 1 ? innerWidth / (rows.length - 1) : innerWidth;
   const barWidth = Math.max(4, Math.min(18, innerWidth / rows.length - 4));
+  const gridLines = [0.25, 0.5, 0.75].map((ratio) => {
+    const y = pad.top + innerHeight * ratio;
+    return `<line x1="${pad.left}" y1="${y.toFixed(1)}" x2="${pad.left + innerWidth}" y2="${y.toFixed(1)}" class="chart-grid"></line>`;
+  }).join("");
 
   const linePoints = rows
     .map((row, index) => {
@@ -161,20 +165,21 @@ function renderChart() {
     const x = pad.left + (rows.length === 1 ? innerWidth / 2 : index * step) - barWidth / 2;
     const h = ((Number(row.td_delta) || 0) / maxDelta) * innerHeight;
     const y = pad.top + innerHeight - h;
-    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${Math.max(1, h).toFixed(1)}" rx="3" fill="#f3b562"></rect>`;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${Math.max(1, h).toFixed(1)}" rx="1" class="chart-bar"></rect>`;
   }).join("");
 
   const labels = chartLabels(rows, pad, innerWidth);
   elements.chart.innerHTML = `
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="最近 60 天活跃用户和 TD 增量趋势">
-      <line x1="${pad.left}" y1="${pad.top + innerHeight}" x2="${pad.left + innerWidth}" y2="${pad.top + innerHeight}" stroke="#dce4e8"></line>
-      <line x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${pad.top + innerHeight}" stroke="#dce4e8"></line>
+      ${gridLines}
+      <line x1="${pad.left}" y1="${pad.top + innerHeight}" x2="${pad.left + innerWidth}" y2="${pad.top + innerHeight}" class="chart-axis"></line>
+      <line x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${pad.top + innerHeight}" class="chart-axis"></line>
       ${bars}
-      <polyline points="${linePoints}" fill="none" stroke="#0f766e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></polyline>
+      <polyline points="${linePoints}" fill="none" class="chart-line" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></polyline>
       ${rows.map((row, index) => {
         const x = pad.left + (rows.length === 1 ? innerWidth / 2 : index * step);
         const y = pad.top + innerHeight - ((Number(row.active_students) || 0) / maxStudents) * innerHeight;
-        return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="#0f766e"><title>${escapeHtml(row.day)}：活跃用户 ${formatNumber(row.active_students)}，TD +${formatNumber(row.td_delta)}</title></circle>`;
+        return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" stroke-width="1.8" class="chart-point"><title>${escapeHtml(row.day)}：活跃用户 ${formatNumber(row.active_students)}，TD +${formatNumber(row.td_delta)}</title></circle>`;
       }).join("")}
       <text x="${pad.left}" y="15" class="axis-label">活跃用户</text>
       <text x="${pad.left + innerWidth - 110}" y="15" class="axis-label">柱：TD 增量</text>
