@@ -45,6 +45,11 @@ def run_user_pipeline(
             logger.warning("用户 %s 入口打卡失败", user.student_id)
             return False
         client.upload_photo(user.entrance_machine_id, entrance_photo)
+        if has_reached_td_limit(storage, user):
+            message = td_limit_message(user)
+            logger.info(message)
+            enqueue_snapshot_event(storage, "td_limit_reached")
+            return True
 
         wait_s = random.randint(user.wait_time_min, user.wait_time_max)
         logger.info("入口完成，等待 %s 秒后进行出口打卡", wait_s)

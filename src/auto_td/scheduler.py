@@ -298,6 +298,13 @@ def _perform_entrance(
         raise RuntimeError(response.server_message or "入口打卡失败")
     photo = storage.image_path(user.entrance_image).read_bytes()
     client.upload_photo(user.entrance_machine_id, photo, timestamp=now.timestamp())
+    if has_reached_td_limit(storage, user):
+        message = td_limit_message(user)
+        logger.info(message)
+        user_state.update(_completed_user_state(user, now, message))
+        enqueue_snapshot_event(storage, "td_limit_reached", now=now)
+        return True, message
+
     wait_s = int(wait_seconds(user))
     due_at = now + timedelta(seconds=max(0, wait_s))
     message = f"入口完成，等待 {wait_s} 秒后出口"

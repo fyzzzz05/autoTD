@@ -9,7 +9,7 @@
 > 要求：python >= 3.10
 
 ```bash
-pip install autotd-buaa==0.1.11
+pip install autotd-buaa==0.1.12
 ```
 
 ## 本地开发
@@ -60,7 +60,7 @@ autotd init --from ./autoTD
 
 ## Telemetry 上报
 
-从 `0.1.7` 开始，AutoTD 默认开启 telemetry，用于向维护者的 Cloudflare Worker + D1 后台上报安装、运行、停止、用户变化、TD 次数变化和后台运行跨日快照。`0.1.11` 默认 endpoint 为 `https://autotd-telemetry.autotd-buaa.workers.dev`。
+从 `0.1.7` 开始，AutoTD 默认开启 telemetry，用于向维护者的 Cloudflare Worker + D1 后台上报安装、运行、停止、用户变化、TD 次数变化和后台运行跨日快照。`0.1.12` 默认 endpoint 为 `https://autotd-telemetry.autotd-buaa.workers.dev`。
 
 会上报的数据包括：明文学号、每个学号最近一次 TD 次数、当前用户数量、安装实例 ID、AutoTD 版本、平台、事件类型和事件时间。
 
@@ -102,7 +102,7 @@ autotd user count 22375080 --refresh
 
 `autotd user count <student_id>` 默认读取 `~/.autoTD/state.json` 中最近一次缓存的锻炼次数，不访问服务器。需要发送真实 checkdata 请求并刷新缓存时，使用 `--refresh`；该刷新请求需要服务器在当前时间返回包含“本学期锻炼次数”的消息。
 
-如果本地缓存显示某个用户本学期 TD 次数已经达到 32 次，`autotd run` 和 `autotd run --once` 会跳过该用户，不再继续入口/出口打卡。跳过时仍会发送 telemetry 快照，用于更新 Cloudflare 中的今日活跃用户和最新 TD 次数；因为没有发生新的出口打卡，不会计入今日新增 TD 打卡数。
+如果本地缓存显示某个用户本学期 TD 次数已经达到 32 次，`autotd run` 和 `autotd run --once` 会跳过该用户，不再继续入口/出口打卡。若入口打卡成功后服务器返回的次数已经达到 32 次，也会在入口图片上传后停止该用户后续出口/下一轮打卡。跳过时仍会发送 telemetry 快照，用于更新 Cloudflare 中的今日活跃用户和最新 TD 次数；因为没有发生新的出口打卡，不会计入今日新增 TD 打卡数。
 
 使用 `--quick` 时，只需要指定校区：
 

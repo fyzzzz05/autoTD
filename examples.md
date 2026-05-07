@@ -6,7 +6,7 @@ python3 -m venv ~/.venvs/autotd
 source ~/.venvs/autotd/bin/activate
 
 python -m pip install -U pip
-pip install autotd-buaa==0.1.11
+pip install autotd-buaa==0.1.12
 
 autotd --help
 以后每次使用前：
@@ -94,7 +94,7 @@ autotd user count 22375080
 需要发送真实 checkdata 请求并刷新缓存时：
 
 autotd user count 22375080 --refresh
-如果本地缓存显示该用户本学期 TD 次数已经达到 32 次，运行打卡时会自动跳过该用户；这会更新 telemetry 今日活跃用户快照，但不会增加 Cloudflare 中的今日 TD 打卡数。
+如果本地缓存显示该用户本学期 TD 次数已经达到 32 次，运行打卡时会自动跳过该用户；如果入口打卡后才发现次数已经达到 32 次，也会停止后续出口/下一轮打卡。这会更新 telemetry 今日活跃用户快照，但不会增加 Cloudflare 中的今日 TD 打卡数。
 7. 立即运行一次
 
 autotd run --once
@@ -134,7 +134,7 @@ cat ~/.autoTD/config.json
 确认 server.ip 不是 127.0.0.1，而是可访问的 TD 服务器地址，例如 10.212.28.38；同时确认当前网络可访问校园网或已连接 VPN。
 安装包名是：
 
-pip install autotd-buaa==0.1.11
+pip install autotd-buaa==0.1.12
 命令名是：
 
 autotd
