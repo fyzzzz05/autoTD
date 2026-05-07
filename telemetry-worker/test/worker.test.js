@@ -364,6 +364,32 @@ describe("autotd telemetry worker", () => {
     assert.equal(testEnv.DB.dailyStudentSnapshots.has("1002:2026-05-05"), true);
   });
 
+  it("counts td-limit skip snapshots as active users without td deltas", async () => {
+    const testEnv = env();
+    await register(testEnv, "install-1", [{ student_id: "1001", td_count: 32 }]);
+    const body = eventBody({
+      event_id: "event-limit-reached",
+      event_type: "td_limit_reached",
+      payload: {
+        current_user_count: 1,
+        users: [{ student_id: "1001", td_count: 32 }]
+      }
+    });
+    const signature = await signPayload("secret-1", body);
+
+    await handleRequest(
+      jsonRequest("https://example.test/v1/events", body, {
+        "X-AutoTD-Installation": "install-1",
+        "X-AutoTD-Signature": signature
+      }),
+      testEnv
+    );
+
+    assert.equal(testEnv.DB.tdDeltas.length, 0);
+    assert.equal(testEnv.DB.dailyStudentSnapshots.has("1001:2026-05-05"), true);
+    assert.equal(testEnv.DB.dailyStudentSnapshots.get("1001:2026-05-05").td_count, 32);
+  });
+
   it("protects admin APIs and returns summary metrics", async () => {
     const testEnv = env();
     await register(testEnv, "install-1", [{ student_id: "1001", td_count: 5 }]);

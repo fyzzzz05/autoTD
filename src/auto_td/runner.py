@@ -4,8 +4,10 @@ import time
 from typing import Callable, Iterable, Optional
 
 from .client import TDClient
+from .limits import has_reached_td_limit, td_limit_message
 from .models import BatchResult, User, UserResult
 from .storage import AppStorage
+from .telemetry import enqueue_snapshot_event
 
 
 LOGGER = logging.getLogger("auto_td")
@@ -29,6 +31,12 @@ def run_user_pipeline(
 
     logger.info("用户 %s 开始，入口=%s 出口=%s 轮数=%s", user.student_id, user.entrance_machine_id, user.exit_machine_id, user.rounds)
     for round_idx in range(user.rounds):
+        if has_reached_td_limit(storage, user):
+            message = td_limit_message(user)
+            logger.info(message)
+            enqueue_snapshot_event(storage, "td_limit_reached")
+            return True
+
         logger.info("用户 %s 第 %s/%s 轮入口打卡", user.student_id, round_idx + 1, user.rounds)
         entrance = client.check(user, user.entrance_machine_id)
         _record_count(storage, user, entrance.count, count_source="td_entrance" if entrance.success else "observation")
@@ -74,8 +82,13 @@ def run_all_users(
 
     for index, user in enumerate(user_list, start=1):
         try:
+            limit_reached_before = has_reached_td_limit(storage, user)
             ok = run_user_pipeline(storage, client, user, sleeper=sleeper, logger=logger)
-            results.append(UserResult(index, user.student_id, ok, "成功" if ok else "pipeline returned failure"))
+            if ok and (limit_reached_before or has_reached_td_limit(storage, user)):
+                message = td_limit_message(user)
+            else:
+                message = "成功" if ok else "pipeline returned failure"
+            results.append(UserResult(index, user.student_id, ok, message))
         except Exception as exc:
             logger.exception("用户 %s 失败，继续下一个用户: %s", user.student_id, exc)
             results.append(UserResult(index, user.student_id, False, str(exc)))

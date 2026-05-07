@@ -8,9 +8,10 @@ from datetime import datetime, timedelta
 from typing import Callable, Iterable, Optional, TYPE_CHECKING
 
 from .constants import BEIJING_TZ
+from .limits import has_reached_td_limit, td_limit_message
 from .models import BatchResult, User, UserResult
 from .storage import AppStorage
-from .telemetry import enqueue_daily_midnight_snapshot, flush_telemetry_queue
+from .telemetry import enqueue_daily_midnight_snapshot, enqueue_snapshot_event, flush_telemetry_queue
 
 if TYPE_CHECKING:
     from .client import TDClient
@@ -79,6 +80,13 @@ def run_scheduler_once(
             message = str(user_state.get("last_error") or user_state.get("last_message") or "未知错误")
             logger.warning("用户 %s 今日状态为 error，等待重启 autotd run 后重试：%s", user.student_id, message)
             results.append(UserResult(index, user.student_id, False, message))
+            continue
+        if has_reached_td_limit(storage, user):
+            message = td_limit_message(user)
+            logger.info(message)
+            user_state.update(_completed_user_state(user, now, message))
+            enqueue_snapshot_event(storage, "td_limit_reached", now=now)
+            results.append(UserResult(index, user.student_id, True, message))
             continue
 
         due_at = _parse_due_at(user_state.get("due_at"))

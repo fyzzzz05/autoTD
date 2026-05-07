@@ -163,6 +163,43 @@ class ProtocolRunnerSchedulerTests(unittest.TestCase):
             ["td_entrance", "td_exit", "td_entrance", "td_exit"],
         )
 
+    def test_runner_skips_user_when_cached_td_count_reaches_limit(self):
+        self.add_user("1001", rounds=2)
+        self.storage.set_last_count("1001", 32)
+        client = FakeClient([])
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = run_all_users(self.storage, client=client, sleeper=lambda _seconds: None)
+
+        self.assertEqual(result.total, 1)
+        self.assertEqual(result.success_count, 1)
+        self.assertEqual(client.check_calls, [])
+        self.assertIn("TD 次数已达 32", result.results[0].message)
+        events = self.telemetry_events()
+        self.assertEqual([event["event_type"] for event in events], ["td_count_changed", "td_limit_reached"])
+        self.assertEqual(events[-1]["payload"]["users"], [{"student_id": "1001", "td_count": 32}])
+
+    def test_runner_stops_next_round_after_exit_reaches_td_limit(self):
+        self.add_user("1001", rounds=2)
+        self.storage.set_last_count("1001", 31)
+        client = FakeClient(
+            [
+                CheckResponse(True, "刷卡成功, 本学期锻炼次数:31", 31),
+                CheckResponse(True, "刷卡成功, 本学期锻炼次数:32", 32),
+            ]
+        )
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = run_all_users(self.storage, client=client, sleeper=lambda _seconds: None)
+
+        self.assertEqual(result.success_count, 1)
+        self.assertEqual(client.check_calls, [("1001", 2), ("1001", 6)])
+        events = self.telemetry_events()
+        count_events = [event for event in events if event["event_type"] == "td_count_changed"]
+        self.assertEqual([event["payload"]["delta"] for event in count_events], [0, 0, 1])
+        self.assertEqual(events[-1]["event_type"], "td_limit_reached")
+        self.assertEqual(events[-1]["payload"]["users"], [{"student_id": "1001", "td_count": 32}])
+
     def test_query_count_uses_check_request_without_uploading_photo(self):
         user = self.add_user("1001")
         client = FakeClient([])
@@ -334,6 +371,27 @@ class ProtocolRunnerSchedulerTests(unittest.TestCase):
         state = self.storage.load_state()["daily_runs"]["2026-04-28"]["users"]["1001"]
         self.assertEqual(state["status"], "error")
         self.assertIn("network down", state["last_error"])
+
+    def test_scheduler_skips_user_when_cached_td_count_reaches_limit_and_queues_snapshot(self):
+        self.add_user("1001", rounds=3)
+        self.storage.set_last_count("1001", 32)
+        client = FakeClient([])
+
+        result = run_scheduler_once(
+            self.storage,
+            now=datetime(2026, 4, 28, 8, 0, 0, tzinfo=BEIJING_TZ),
+            client=client,
+            wait_seconds=lambda _user: 0,
+        )
+
+        self.assertEqual(result.success_count, 1)
+        self.assertEqual(client.check_calls, [])
+        state = self.storage.load_state()["daily_runs"]["2026-04-28"]["users"]["1001"]
+        self.assertEqual(state["status"], "completed")
+        self.assertIn("TD 次数已达 32", state["last_message"])
+        events = self.telemetry_events()
+        self.assertEqual([event["event_type"] for event in events], ["td_count_changed", "td_limit_reached"])
+        self.assertEqual(events[-1]["payload"]["users"], [{"student_id": "1001", "td_count": 32}])
 
     def test_run_forever_sends_midnight_snapshot_only_when_process_crosses_date(self):
         times = iter(
