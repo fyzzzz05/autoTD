@@ -104,6 +104,8 @@ async function acceptEvent(request, env) {
 
   const existing = await env.DB.prepare(getEventSql()).bind(event.event_id).first();
   if (existing) {
+    const storedEvent = eventFromRow(existing);
+    await applyEvent(env.DB, installation, storedEvent, storedEvent.event_day);
     return { ok: true, duplicate: true };
   }
 
@@ -126,8 +128,8 @@ async function applyEvent(db, installation, event, eventDay) {
         installation.installation_secret,
         installation.first_seen_at || event.occurred_at,
         event.occurred_at,
-        event.app_version || "",
-        event.platform || "",
+        event.app_version || installation.app_version || "",
+        event.platform || installation.platform || "",
         users.length,
         users.length
       )
@@ -170,6 +172,17 @@ function normalizeUsers(users) {
       student_id: String(user.student_id),
       td_count: user.td_count === undefined || user.td_count === null ? null : Number(user.td_count)
     }));
+}
+
+function eventFromRow(row) {
+  return {
+    event_id: row.event_id,
+    installation_id: row.installation_id,
+    event_type: row.event_type,
+    event_day: row.event_day,
+    occurred_at: row.occurred_at,
+    payload: JSON.parse(row.payload || "{}")
+  };
 }
 
 function isAdmin(request, env) {
@@ -354,7 +367,7 @@ function getInstallationSecretSql() {
 }
 
 function getEventSql() {
-  return "/* op: get_event */ SELECT event_id FROM events WHERE event_id = ?";
+  return "/* op: get_event */ SELECT event_id, installation_id, event_type, event_day, occurred_at, payload FROM events WHERE event_id = ?";
 }
 
 function insertEventSql() {

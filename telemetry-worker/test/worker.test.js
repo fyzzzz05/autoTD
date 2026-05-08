@@ -11,6 +11,7 @@ class FakeD1 {
     this.tdDeltas = [];
     this.dailyInstallationSnapshots = new Map();
     this.dailyStudentSnapshots = new Map();
+    this.failNextTdDelta = false;
   }
 
   prepare(sql) {
@@ -115,6 +116,13 @@ class FakeStatement {
         return { success: true };
       }
       case "insert_td_delta": {
+        if (this.db.failNextTdDelta) {
+          this.db.failNextTdDelta = false;
+          throw new Error("simulated td delta write failure");
+        }
+        if (this.db.tdDeltas.some((row) => row.event_id === v[0])) {
+          return { success: true, meta: { duplicate: true } };
+        }
         this.db.tdDeltas.push({
           event_id: v[0],
           installation_id: v[1],
@@ -294,6 +302,26 @@ describe("autotd telemetry worker", () => {
     assert.equal(duplicate.status, 200);
     assert.equal(testEnv.DB.events.size, 1);
     assert.equal(testEnv.DB.tdDeltas.length, 1);
+  });
+
+  it("reapplies td deltas when retrying an event already written to events", async () => {
+    const testEnv = env();
+    await register(testEnv);
+    const body = eventBody();
+    const signature = await signPayload("secret-1", body);
+    const headers = { "X-AutoTD-Installation": "install-1", "X-AutoTD-Signature": signature };
+
+    testEnv.DB.failNextTdDelta = true;
+    const failed = await handleRequest(jsonRequest("https://example.test/v1/events", body, headers), testEnv);
+    assert.equal(failed.status, 500);
+    assert.equal(testEnv.DB.events.size, 1);
+    assert.equal(testEnv.DB.tdDeltas.length, 0);
+
+    const retried = await handleRequest(jsonRequest("https://example.test/v1/events", body, headers), testEnv);
+    assert.equal(retried.status, 200);
+    assert.equal(testEnv.DB.events.size, 1);
+    assert.equal(testEnv.DB.tdDeltas.length, 1);
+    assert.equal(testEnv.DB.tdDeltas[0].delta, 3);
   });
 
   it("updates user presence when users are deleted and reappear", async () => {
