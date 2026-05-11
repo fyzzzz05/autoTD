@@ -4,6 +4,7 @@ import signal
 import subprocess
 import sys
 import time
+from csv import reader as csv_reader
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -62,7 +63,15 @@ def stop_scheduler_process(storage: AppStorage, timeout: float = 5.0) -> Backgro
         clear_pid_file(storage.pid_path)
         return BackgroundStopResult(pid, False, f"未发现运行中的后台定时检测进程 PID={pid}，已清理 pid 文件")
 
-    terminate_process(pid)
+    try:
+        terminate_process(pid)
+    except ProcessLookupError:
+        clear_pid_file(storage.pid_path)
+        return BackgroundStopResult(pid, False, f"后台定时检测进程不存在或已退出 PID={pid}，已清理 pid 文件")
+    except PermissionError:
+        return BackgroundStopResult(pid, False, f"停止后台定时检测进程权限不足 PID={pid}，请使用管理员权限重试")
+    except Exception as exc:
+        return BackgroundStopResult(pid, False, f"停止后台定时检测进程失败 PID={pid}: {exc}")
     deadline = time.time() + timeout
     while time.time() < deadline:
         if not is_process_running(pid):
@@ -110,6 +119,10 @@ def clear_pid_file(pid_path: Path, expected_pid: Optional[int] = None) -> None:
 
 
 def is_process_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        return _is_process_running_windows(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -120,4 +133,53 @@ def is_process_running(pid: int) -> bool:
 
 
 def terminate_process(pid: int) -> None:
+    if os.name == "nt":
+        _terminate_process_windows(pid)
+        return
     os.kill(pid, signal.SIGTERM)
+
+
+def _is_process_running_windows(pid: int) -> bool:
+    completed = subprocess.run(
+        ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return False
+
+    for raw_line in completed.stdout.splitlines():
+        line = raw_line.strip()
+        if not line or not line.startswith('"'):
+            continue
+        row = next(csv_reader([line]), [])
+        if len(row) < 2:
+            continue
+        try:
+            if int(row[1]) == pid:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _terminate_process_windows(pid: int) -> None:
+    completed = subprocess.run(
+        ["taskkill", "/PID", str(pid), "/T"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode == 0:
+        return
+
+    detail = "\n".join(part.strip() for part in (completed.stdout, completed.stderr) if part and part.strip())
+    lowered = detail.lower()
+    if any(token in lowered for token in ("not found", "no running instance", "no tasks are running")):
+        raise ProcessLookupError(pid)
+    if any(token in detail for token in ("找不到", "不存在")):
+        raise ProcessLookupError(pid)
+    if "access is denied" in lowered or any(token in detail for token in ("拒绝访问", "存取被拒")):
+        raise PermissionError(detail or f"Access denied when stopping PID={pid}")
+    raise RuntimeError(detail or f"taskkill failed with exit code {completed.returncode}")
