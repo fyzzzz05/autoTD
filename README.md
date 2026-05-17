@@ -5,26 +5,25 @@
 
 `autoTD` 是一个用于 BUAA TD 打卡流程管理与执行的 Python CLI 工具。
 
-> 运行大多数功能需要校园网环境（或可访问校园网的 VPN）。
+> 仅支持校园网直连环境，不支持 VPN。
 
 ## Quickstart
 
 ```bash
-python -m pip install autotd-buaa
+# 1) 安装 PyPI 包
+pip install autotd-buaa
+
+# 2) 初始化本地配置目录（默认 ~/.autoTD）
 autotd init
-autotd --help
-```
 
-## Example
+# 3) 准备至少一张打卡图片并导入
+autotd image add ~/images/image1.jpg
 
-```bash
-# 1) 使用 quick 模式添加用户
-autotd user add 22375080 --quick 沙河
+# 4) 添加用户（quick 模式自动填充学院路机位组合）
+autotd user add 2xxxxxxx --quick 学院路
 
-# 2) 前台执行一次
-autotd run --once
-
-# 3) 查看当前状态与缓存次数
-autotd status
-autotd user count 22375080
+# 5) 启动打卡流程
+#    - autotd run       : 后台持续运行
+#    - autotd run --once: 前台仅执行一轮
+autotd run [--once]
 ```
