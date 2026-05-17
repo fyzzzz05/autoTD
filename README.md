@@ -27,3 +27,16 @@ autotd user add 2xxxxxxx --quick 学院路
 #    - autotd run --once: 前台仅执行一轮
 autotd run [--once]
 ```
+
+## 状态与 TD 次数查询
+
+```bash
+# 查看当前后台运行状态与今日执行进度
+autotd status
+
+# 查看某个学号当前缓存的 TD 次数（不访问服务器）
+autotd user count 2xxxxxxx
+
+# 实时查询服务器并刷新本地 TD 次数缓存
+autotd user count 2xxxxxxx --refresh
+```
