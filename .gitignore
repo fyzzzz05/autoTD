@@ -20,3 +20,6 @@ src/*.egg-info/
 telemetry-worker/.wrangler/
 telemetry-worker/node_modules/
 telemetry-worker/.workers-dev-subdomain
+
+# Local D1 recovery exports. These can contain installation secrets and student ids.
+.restore-snapshots/

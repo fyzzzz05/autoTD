@@ -121,6 +121,20 @@ async function acceptEvent(request, env) {
 async function applyEvent(db, installation, event, eventDay) {
   const payload = event.payload || {};
   const users = normalizeUsers(payload.users);
+  if (event.event_type === "td_count_changed" && Number(payload.delta) > 0) {
+    await db.prepare(insertTdDeltaSql())
+      .bind(
+        event.event_id,
+        event.installation_id,
+        String(payload.student_id),
+        eventDay,
+        Number(payload.delta),
+        Number(payload.new_count),
+        event.occurred_at
+      )
+      .run();
+  }
+
   if (Array.isArray(payload.users)) {
     await db.prepare(upsertInstallationSql())
       .bind(
@@ -135,20 +149,6 @@ async function applyEvent(db, installation, event, eventDay) {
       )
       .run();
     await applySnapshot(db, event.installation_id, users, eventDay, event.occurred_at);
-  }
-
-  if (event.event_type === "td_count_changed" && Number(payload.delta) > 0) {
-    await db.prepare(insertTdDeltaSql())
-      .bind(
-        event.event_id,
-        event.installation_id,
-        String(payload.student_id),
-        eventDay,
-        Number(payload.delta),
-        Number(payload.new_count),
-        event.occurred_at
-      )
-      .run();
   }
 }
 
@@ -320,10 +320,10 @@ INSERT INTO installations (installation_id, installation_secret, first_seen_at, 
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(installation_id) DO UPDATE SET
   installation_secret = excluded.installation_secret,
-  last_seen_at = excluded.last_seen_at,
-  app_version = excluded.app_version,
-  platform = excluded.platform,
-  current_user_count = excluded.current_user_count,
+  last_seen_at = MAX(installations.last_seen_at, excluded.last_seen_at),
+  app_version = CASE WHEN excluded.last_seen_at >= installations.last_seen_at THEN excluded.app_version ELSE installations.app_version END,
+  platform = CASE WHEN excluded.last_seen_at >= installations.last_seen_at THEN excluded.platform ELSE installations.platform END,
+  current_user_count = CASE WHEN excluded.last_seen_at >= installations.last_seen_at THEN excluded.current_user_count ELSE installations.current_user_count END,
   max_user_count = MAX(installations.max_user_count, excluded.current_user_count)`;
 }
 
@@ -336,8 +336,11 @@ function upsertStudentSql() {
 INSERT INTO students (student_id, first_seen_at, last_seen_at, latest_td_count)
 VALUES (?, ?, ?, ?)
 ON CONFLICT(student_id) DO UPDATE SET
-  last_seen_at = excluded.last_seen_at,
-  latest_td_count = COALESCE(excluded.latest_td_count, students.latest_td_count)`;
+  last_seen_at = MAX(students.last_seen_at, excluded.last_seen_at),
+  latest_td_count = CASE
+    WHEN excluded.last_seen_at >= students.last_seen_at THEN COALESCE(excluded.latest_td_count, students.latest_td_count)
+    ELSE students.latest_td_count
+  END`;
 }
 
 function upsertInstallationStudentSql() {
@@ -345,9 +348,12 @@ function upsertInstallationStudentSql() {
 INSERT INTO installation_students (installation_id, student_id, first_seen_at, last_seen_at, latest_td_count, present)
 VALUES (?, ?, ?, ?, ?, 1)
 ON CONFLICT(installation_id, student_id) DO UPDATE SET
-  last_seen_at = excluded.last_seen_at,
-  latest_td_count = COALESCE(excluded.latest_td_count, installation_students.latest_td_count),
-  present = 1`;
+  last_seen_at = MAX(installation_students.last_seen_at, excluded.last_seen_at),
+  latest_td_count = CASE
+    WHEN excluded.last_seen_at >= installation_students.last_seen_at THEN COALESCE(excluded.latest_td_count, installation_students.latest_td_count)
+    ELSE installation_students.latest_td_count
+  END,
+  present = CASE WHEN excluded.last_seen_at >= installation_students.last_seen_at THEN 1 ELSE installation_students.present END`;
 }
 
 function insertDailyInstallationSnapshotSql() {
@@ -359,7 +365,13 @@ VALUES (?, ?, ?)`;
 function insertDailyStudentSnapshotSql() {
   return `/* op: insert_daily_student_snapshot */
 INSERT OR REPLACE INTO daily_student_snapshots (student_id, day, td_count)
-VALUES (?, ?, ?)`;
+VALUES (?, ?, ?)
+ON CONFLICT(student_id, day) DO UPDATE SET
+  td_count = CASE
+    WHEN excluded.td_count IS NULL THEN daily_student_snapshots.td_count
+    WHEN daily_student_snapshots.td_count IS NULL THEN excluded.td_count
+    ELSE MAX(daily_student_snapshots.td_count, excluded.td_count)
+  END`;
 }
 
 function getInstallationSecretSql() {
