@@ -8,6 +8,7 @@ version = "0.1.13"
 description = "BUAA TD automation command line utility"
 readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
 authors = [
   { name = "autoTD maintainers" }
 ]
@@ -15,6 +16,7 @@ keywords = ["buaa", "td", "cli"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
+  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.10",
