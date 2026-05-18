@@ -28,38 +28,6 @@ autotd user add 2xxxxxxx --quick 学院路
 autotd run [--once]
 ```
 
-## Windows 安装说明（PATH）
-
-在 Windows 上，如果 `pip install autotd-buaa` 输出类似警告：
-
-```text
-... is installed in 'C:\Users\<you>\AppData\Roaming\Python\PythonXY\Scripts' which is not on PATH
-```
-
-说明 `autotd.exe` 已安装成功，但当前终端找不到该目录，因此 `autotd` 命令不可直接调用。
-
-### 方案 A：先不改 PATH，直接使用模块入口
-
-```powershell
-py -m auto_td.cli init
-```
-
-### 方案 B：将用户 Scripts 目录加入 PATH（推荐，一次配置长期生效）
-
-```powershell
-$scriptDir = py -c "import sysconfig; print(sysconfig.get_path('scripts', 'nt_user'))"
-$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($userPath -notlike "*$scriptDir*") {
-  [Environment]::SetEnvironmentVariable("Path", "$userPath;$scriptDir", "User")
-}
-```
-
-执行后请重开 PowerShell，再运行：
-
-```powershell
-autotd --help
-```
-
 ## 状态与 TD 次数查询
 
 ```bash
@@ -71,4 +39,18 @@ autotd user count 2xxxxxxx
 
 # 实时查询服务器并刷新本地 TD 次数缓存
 autotd user count 2xxxxxxx --refresh
+```
+
+## Windows（PATH）
+
+若安装后提示 `...Scripts is not on PATH` 且 `autotd` 不可用，可先用：
+
+```powershell
+py -m auto_td.cli init
+```
+
+或将用户 Scripts 目录加入 PATH（重开终端后生效）：
+
+```powershell
+$d = py -c "import sysconfig; print(sysconfig.get_path('scripts','nt_user'))"; [Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path","User") + ";" + $d, "User")
 ```
