@@ -41,16 +41,33 @@ autotd user count 2xxxxxxx
 autotd user count 2xxxxxxx --refresh
 ```
 
-## Windows（PATH）
+## PATH（Windows / macOS / Linux）
 
-若安装后提示 `...Scripts is not on PATH` 且 `autotd` 不可用，可先用：
+若安装后提示 `... is not on PATH` 且 `autotd` 不可用，可先用：
 
-```powershell
-py -m auto_td.cli init
+```bash
+python -m auto_td.cli init
 ```
 
-或将用户 Scripts 目录加入 PATH（重开终端后生效）：
+再按系统把用户脚本目录加入 PATH（执行后重开终端）：
 
 ```powershell
+# Windows (PowerShell)
 $d = py -c "import sysconfig; print(sysconfig.get_path('scripts','nt_user'))"; [Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path","User") + ";" + $d, "User")
+```
+
+```bash
+# macOS (zsh)
+echo 'export PATH="$(python3 -m site --user-base)/bin:$PATH"' >> ~/.zprofile && source ~/.zprofile
+```
+
+```bash
+# Linux (bash)
+echo 'export PATH="$(python3 -m site --user-base)/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
+```
+
+验证：
+
+```bash
+autotd --help
 ```
